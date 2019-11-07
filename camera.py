@@ -9,19 +9,29 @@ import time
 # ---- Socket configuration
 
 # family: socket.AF_INET (用於網路通訊)、socket.AF_UNIX (同一台機器通訊)
-# type: socket.SOCK_STREAM (TCP)、socket.SOCKET_DGRAM (UDP)
-sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
+# type: socket.SOCK_STREAM (TCP)、socket.SOCK_DGRAM (UDP)
+sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
 
 
-host = '192.168.0.249'          # 欲連線的主機
-host = '127.0.0.1'          # 欲連線的主機
+#host = '192.168.0.249'          # 欲連線的主機
+host = '127.0.0.1'               # local server
+#host = '192.168.0.244'          # Rain Server
+#host = '192.168.100.104'        # Rain Latta Panda (DHCP)
 
-port = 5000                 # 欲連線的主機埠號
+
+port = 6666                 # 欲連線的主機埠號
 loc = (host, port)
-try:
-    sock.connect(loc)              # 透過 ip 與 port 進行連線
-except:
-    print('socket Error, 請確認網路狀況')
+
+
+# ---- for TCP ---- #
+#while True:
+#    try:
+#        sock.connect(loc)              # 透過 ip 與 port 進行連線
+#        print('socket sucess!')
+#        break
+#    except:
+#        print('socket Error! sleep 3 seconds...')
+#        time.sleep(3)
 
 
 # 啟動 Realsense 攝影機
@@ -36,8 +46,8 @@ while True:
         
 
 
-min_depth = 600    # 深度允許最小值
-max_depth = 1000    # 深度允許最大值
+min_depth = 200    # 深度允許最小值
+max_depth = 500    # 深度允許最大值
 
 # 使用遞迴進行座標點的二分法, 將相近的點做合併
 def getClusterPoint(points):       
@@ -126,40 +136,53 @@ while True:
 
             # ---- 判斷座標點移動程度 ---- #
 
-            pts = move.is_move(f_points_pre, f_points)
-            f_points_pre = [ps.copy() for ps in f_points]  # 將上一群座標點記起來
-
-            # ---- 將最終座標透過 socket 傳送到 Server 端
-            who = b'machineA'
-            cord = ''
-            for p in f_points:
-                px, py = round(p[0], 1), round(p[1], 1)
-                cord += '@' + str(px) + ',' + str(py)
-            cord = str.encode(cord)     # 字串轉 byte 型別
-            message = who + cord        # 欲傳送的訊息
-            try:
-                sock.sendall(message)
-                response = sock.recv(4096)  # 接收伺服器的響應
-#                print('傳送成功')
-            except socket.error:
-                print('傳送失敗, 等待 3 秒後再次與 server 進行連線')
-                time.sleep(3)
-                # 再次嘗試使用 socket 連線
-                try:
-                    sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
-                    sock.connect(loc)              # 透過 ip 與 port 進行連線
-                    print('socket ok')
-                except:
-                    print('socket Error, 請確認網路狀況')
-            # ---- 將最終座標透過 socket 傳送到 Server 端
+            pts = move.is_move(f_points_pre, f_points)  # 穩定點
             
+#            print('f_points', f_points)
+#            print('f_points_pre', f_points_pre)
+            f_points_pre = [ps.copy() for ps in f_points]  # 將上一群座標點記起來
+            
+            # ---- 將最終座標透過 socket 傳送到 Server 端
+            if pts != []:
+                # ---- 繪製穩定點 ---- #
+                for p in pts:
+                    px, py = int(p[0]), int(p[1])
+                    cv2.circle(depth_img_8U, (px, py), 20, (0, 0, 0), -1)
+                # ---- 繪製穩定點 ---- #
+            
+                who = b'machineA'
+                cord = ''
+                for p in pts:
+                    px, py = round(p[0], 1), round(p[1], 1)
+                    cord += '@' + str(px) + ',' + str(py)
+                cord = str.encode(cord)     # 字串轉 byte 型別
+                message = who + cord        # 欲傳送的訊息
+                print(cord)
+                try:
+                    sock.sendto(message, loc)
+#                    response = sock.recv(4096)  # 接收伺服器的響應
+                    print('send sucess')
+                except socket.error:
+                    print('socket send fail, wait 3 second')
+                    time.sleep(3)
+                    # 再次嘗試使用 socket 連線
+                    try:
+                        sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
+#                        sock.connect(loc)              # 透過 ip 與 port 進行連線
+                        print('socket ok')
+                    except:
+                        print('socket Error, check internet')
+                # ---- 將最終座標透過 socket 傳送到 Server 端
+            else:
+                print('No new points to socket')
+                pass
             
 
         else:
-            print('沒有偵測到面積大於 12000 的輪廓')
+#            print('沒有偵測到面積大於 12000 的輪廓')
             pass
     else:
-        print('沒有偵測到輪廓')
+#        print('沒有偵測到輪廓')
         pass
     cv2.imshow('Frame', depth_img_8U)        # 顯示影像
     
