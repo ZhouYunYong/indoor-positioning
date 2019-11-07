@@ -5,19 +5,16 @@ import cv2
 import socket
 import time
 
-
 # ---- Socket configuration
 
 # family: socket.AF_INET (用於網路通訊)、socket.AF_UNIX (同一台機器通訊)
 # type: socket.SOCK_STREAM (TCP)、socket.SOCK_DGRAM (UDP)
 sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
 
-
 #host = '192.168.0.249'          # 欲連線的主機
 host = '127.0.0.1'               # local server
 #host = '192.168.0.244'          # Rain Server
 #host = '192.168.100.104'        # Rain Latta Panda (DHCP)
-
 
 port = 6666                 # 欲連線的主機埠號
 loc = (host, port)
@@ -44,8 +41,6 @@ while True:
     except:
         print('Camera Error, try again...')
         
-
-
 min_depth = 200    # 深度允許最小值
 max_depth = 500    # 深度允許最大值
 
@@ -65,10 +60,9 @@ def getClusterPoint(points):
     if gp2:  #  如果第 2 群有座標點, 遞迴繼續分 2 群
         getClusterPoint(gp2)    
 
-
 # ---- 座標點移動程度 設定 ----#
-import module_move as move
-f_points_pre = []
+import module_move2 as move
+passed = []        # 傳送過的座標點
 # ---- 座標點移動程度 設定 ----#
 
 
@@ -95,7 +89,7 @@ while True:
     rgb_img = np.asanyarray(rgb_data)                # 將 rgb 影格資料轉為 array 
     depth_data = depth.as_frame().get_data()         # 取得深度影格資料
     depth_img = np.asanyarray(depth_data)            # 將深度影格資料轉為 array 
-#    print(depth_img.shape)                          # 深度影像的尺寸為 720x1280
+#    print(depth_img.shape)                          # 深度影像的尺寸為 1280x720 (shape為 720,1280)
     
     depth_img[depth_img < min_depth] = min_depth     # 深度值小於 min_depth 設為 min_depth
     depth_img[depth_img > max_depth] = min_depth     # 深度值大於 max_depth 設為 min_depth
@@ -112,7 +106,7 @@ while True:
         # cv2.drawContours(   depth_img_8U,      # 繪製輪廓線
         #                     contours, -1, 
         #                     (255, 255, 255), 2)
-#        print('偵測到移動')
+        # print('偵測到移動')
         #----  計算輪廓平均座標點
         points = []                     # 儲存所有輪廓的平均座標點
         for c in contours:
@@ -129,27 +123,23 @@ while True:
             # print(f'找到 {len(f_points)} 個點')
             
             # ---- 繪製輪廓平均點
-            for p in f_points:
-                px, py = int(p[0]), int(p[1])
-                cv2.circle(depth_img_8U, (px, py), 10, (0, 0, 0), -1)
+            # for p in f_points:
+            #     px, py = int(p[0]), int(p[1])
+            #     cv2.circle(depth_img_8U, (px, py), 10, (0, 0, 0), -1)
             
-
             # ---- 判斷座標點移動程度 ---- #
-
-            pts = move.is_move(f_points_pre, f_points)  # 穩定點
-            
-#            print('f_points', f_points)
-#            print('f_points_pre', f_points_pre)
-            f_points_pre = [ps.copy() for ps in f_points]  # 將上一群座標點記起來
+            pts = move.is_move(passed, f_points)  # 穩定點
+            # print('pts', pts)
             
             # ---- 將最終座標透過 socket 傳送到 Server 端
             if pts != []:
-                # ---- 繪製穩定點 ---- #
+                print('pts', pts)
+                # 繪製需傳送的座標點
                 for p in pts:
                     px, py = int(p[0]), int(p[1])
-                    cv2.circle(depth_img_8U, (px, py), 20, (0, 0, 0), -1)
-                # ---- 繪製穩定點 ---- #
-            
+                    cv2.circle(depth_img_8U, (px, py), 10, (0, 0, 0), -1)
+
+                passed = [ps.copy() for ps in f_points]  # 將目前座標點更新為已傳送清單
                 who = b'machineA'
                 cord = ''
                 for p in pts:
@@ -174,7 +164,7 @@ while True:
                         print('socket Error, check internet')
                 # ---- 將最終座標透過 socket 傳送到 Server 端
             else:
-                print('No new points to socket')
+                # print('No new points to socket')
                 pass
             
 
