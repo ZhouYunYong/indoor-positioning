@@ -1,0 +1,63 @@
+camera1:
+
+多偵測點進行合併
+
+
+camera2:
+因為 f_points 座標點因為雜訊而不斷移動, 
+此程式碼加入了座標點移動距離的判斷, 若 dist_min < 移動距離 < dist_max, 才將座標用 socket 送出。
+
+camera3:
+
+TCP 改 UDP
+
+
+camera4、module_move2：
+
+建立一個欲傳送清單, 傳送過的座標點先記起來, 
+
+下次要傳送新座標點時, 先跟此清單做比較, 若有低於 d_max 距離, 則不傳送此點。
+
+若皆無低於 d_max 距離, 則傳送此點, 並將此點存於此清單。
+
+socket 端, 若傳送清單不為空, 則傳送清單的座標點。接著, 將目前的點記錄成傳送過的座標點清單。
+
+
+
+
+camera5、GeorgeModule:
+
+函式全都打包到 Mudule 中。
+
+
+camera6、GeorgeModule:
+
+加上讀取 Serail 資料, 並根據此資料來設定機器名稱:
+
+
+machineA
+machineB
+machineC
+machineD
+machineE
+machineF
+
+
+
+Camera7 ：
+資料皆由 setting 檔設定
+
+
+Camera8 ：
+
+取消 arduino
+機器名稱改由 setting 檔設定
+
+
+Camera9 ：
+
+尋找腳座標
+# ---- 尋找最大深度值的平均座標
+
+
+

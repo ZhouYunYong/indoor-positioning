@@ -1,0 +1,7 @@
+﻿min_depth=500
+max_depth=2000
+max_contorArea=300000
+min_contorArea=6000
+noise_dist=50
+combi_dist=100
+machine_name=machineB
