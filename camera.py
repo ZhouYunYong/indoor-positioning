@@ -4,23 +4,30 @@ import numpy as np
 import cv2
 import socket
 import time
-import serial
 import GeorgeModule as m     # 匯入詠運模組
 
 
 
 # ----------- 相關數值調整
 res = m.get_setting()
-print('傳回：', res)                # 輸出傳回的結果
-min_depth = res[0]             # 偵測深度的最小值 (最近距離)
-max_depth = res[1]             # 偵測深度的最大值 (最遠距離)
-max_contorArea = res[2]     # 最大偵測輪廓面積
-min_contorArea = res[3]      # 最小偵測輪廓面積
+print('傳回：', res)             # 輸出傳回的結果
+min_depth = res[0]              # 偵測深度的最小值 (最近距離)
+max_depth = res[1]              # 偵測深度的最大值 (最遠距離)
+max_contorArea = res[2]         # 最大偵測輪廓面積
+min_contorArea = res[3]         # 最小偵測輪廓面積
 noise_dist = res[4]             # 雜訊距離控制
 combi_dist = res[5]             # 偵測點結合距離
-com = res[6]                    # COM 編號
+who = res[6]                    # 機器名稱
 
-
+print('machine name: ', who)
+"""
+machineA
+machineB
+machineC
+machineD
+machineE
+machineF
+"""
 
 # ---------------
 
@@ -44,33 +51,6 @@ passed_points = []        # 曾經用 socket 傳過的座標點
 
 
 # ----------------------- 主程式 ---------------------------- #
-
-
-# ---- 設定機器名稱
-
-who = b''
-machine_dict = {'9':  b'machineA', 
-                '10': b'machineB', 
-                '11': b'machineC', 
-                '18': b'machineD', 
-                '19': b'machineE', 
-                '20': b'machineF',
-                '0':  b'machineG'}
-
-COM_PORT = com          # 指定通訊埠名稱
-BAUD_RATES = 9600    # 設定傳輸速率
-arduino = serial.Serial(COM_PORT, BAUD_RATES)   # 初始化序列通訊埠
-
-while who == b'':                             # 持續等待 arduino serial 
-    if arduino.in_waiting:              # 若收到序列資料…
-        data_raw = arduino.readline()   # 讀取一行
-        data = data_raw.decode()        # 用預設的 UTF-8 解碼
-        data = data.replace('\r\n', '') # 去除
-        who = machine_dict[data]
-        arduino.close()                 # 關閉序列埠
-
-# who = machine_dict['20']
-print('machine name: ', who)
 
 # ---- 啟動 Realsense 攝影機, 若啟動失敗, 會持續嘗試, 直到連上
 while True:
@@ -125,6 +105,7 @@ while True:
         # print('偵測到移動')
         #----  計算輪廓平均座標點
         points = []                     # 儲存所有輪廓的平均座標點
+        
         for c in contours:
             if max_contorArea > cv2.contourArea(c) > min_contorArea:  # 面積介於此範圍的輪廓才需要計算平均座標點
                 avp = np.mean(c, axis=0)    # 求形成輪廓的點的平均座標
@@ -132,6 +113,7 @@ while True:
 
         if points:                          # 如果有大於 12000 的輪廓平均座標點
             points = np.array(points)
+            # [  [[1,2,..m]],   [[1,2,..m]],   [[n]] ]
             points = points[:, 0, :]        # 這是因為多了中間一維 [n, 1, m] -> [n, m]
             # ---- 將過於相近的點合併
             f_points = m.getClusterPoint(points, dist=combi_dist)    # 將所有的輪廓平均座標點丟入遞迴函式中進行分組
