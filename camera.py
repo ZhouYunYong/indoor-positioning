@@ -11,8 +11,11 @@ import time
 # family: socket.AF_INET (用於網路通訊)、socket.AF_UNIX (同一台機器通訊)
 # type: socket.SOCK_STREAM (TCP)、socket.SOCKET_DGRAM (UDP)
 sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
+
+
 host = '192.168.0.249'          # 欲連線的主機
 host = '127.0.0.1'          # 欲連線的主機
+
 port = 5000                 # 欲連線的主機埠號
 loc = (host, port)
 try:
@@ -32,13 +35,14 @@ while True:
         print('Camera Error, try again...')
         
 
+
 min_depth = 600    # 深度允許最小值
 max_depth = 1000    # 深度允許最大值
 
 # 使用遞迴進行座標點的二分法, 將相近的點做合併
 def getClusterPoint(points):       
-    dist = 50               # 距離在 dist 之內進行合併
-    gp1 = [points[0]]       # 用第一個點當基準點, 將點分成 2 群
+    dist = 50          # 距離在 dist 之內進行合併
+    gp1 = [points[0]]   # 用第一個點當基準點, 將點分成 2 群
     gp2 = []
     for i in range(1 , len(points)):   
         d = pow(pow(points[0][0] - points[i][0], 2)  +  pow(points[0][1] - points[i][1], 2), 0.5)
@@ -51,7 +55,16 @@ def getClusterPoint(points):
     if gp2:  #  如果第 2 群有座標點, 遞迴繼續分 2 群
         getClusterPoint(gp2)    
 
+
+# ---- 座標點移動程度 設定 ----#
+import module_move as move
+f_points_pre = []
+# ---- 座標點移動程度 設定 ----#
+
+
+# ---- 主程式 ---- #
 while True:
+
     try:
         frames = pipeline.wait_for_frames()
         depth = frames.get_depth_frame()
@@ -110,6 +123,12 @@ while True:
                 px, py = int(p[0]), int(p[1])
                 cv2.circle(depth_img_8U, (px, py), 10, (0, 0, 0), -1)
             
+
+            # ---- 判斷座標點移動程度 ---- #
+
+            pts = move.is_move(f_points_pre, f_points)
+            f_points_pre = [ps.copy() for ps in f_points]  # 將上一群座標點記起來
+
             # ---- 將最終座標透過 socket 傳送到 Server 端
             who = b'machineA'
             cord = ''
@@ -132,6 +151,10 @@ while True:
                     print('socket ok')
                 except:
                     print('socket Error, 請確認網路狀況')
+            # ---- 將最終座標透過 socket 傳送到 Server 端
+            
+            
+
         else:
             print('沒有偵測到面積大於 12000 的輪廓')
             pass
