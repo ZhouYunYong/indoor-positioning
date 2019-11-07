@@ -5,11 +5,22 @@ import cv2
 import socket
 import time
 
-# ---- Socket configuration
 
-# family: socket.AF_INET (用於網路通訊)、socket.AF_UNIX (同一台機器通訊)
-# type: socket.SOCK_STREAM (TCP)、socket.SOCK_DGRAM (UDP)
-sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
+# ---- 相關數值調整 
+
+min_depth = 100             # 偵測深度的最小值 (最近距離)
+max_depth = 300             # 偵測深度的最大值 (最遠距離)
+max_contorArea = 200000     # 最大偵測輪廓面積
+min_contorArea = 12000      # 最小偵測輪廓面積
+noise_dist = 50             # 雜訊距離控制
+
+
+# ---- 相關數值調整 
+
+
+
+# ---- Socket configuration
+sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM) 
 
 #host = '192.168.0.249'          # 欲連線的主機
 host = '127.0.0.1'               # local server
@@ -20,18 +31,7 @@ port = 6666                 # 欲連線的主機埠號
 loc = (host, port)
 
 
-# ---- for TCP ---- #
-#while True:
-#    try:
-#        sock.connect(loc)              # 透過 ip 與 port 進行連線
-#        print('socket sucess!')
-#        break
-#    except:
-#        print('socket Error! sleep 3 seconds...')
-#        time.sleep(3)
-
-
-# 啟動 Realsense 攝影機
+# ---- 啟動 Realsense 攝影機, 若啟動失敗, 會持續嘗試, 直到
 while True:
     try:
         pipeline = rs.pipeline()
@@ -41,28 +41,10 @@ while True:
     except:
         print('Camera Error, try again...')
         
-min_depth = 200    # 深度允許最小值
-max_depth = 500    # 深度允許最大值
-
-# 使用遞迴進行座標點的二分法, 將相近的點做合併
-def getClusterPoint(points):       
-    dist = 50          # 距離在 dist 之內進行合併
-    gp1 = [points[0]]   # 用第一個點當基準點, 將點分成 2 群
-    gp2 = []
-    for i in range(1 , len(points)):   
-        d = pow(pow(points[0][0] - points[i][0], 2)  +  pow(points[0][1] - points[i][1], 2), 0.5)
-        d = round(d, 1)
-        if d < dist:    # 若兩點距離小於 dist, 分入第一群
-            gp1.append(points[i])
-        else:           # 其餘的都先分入第二群
-            gp2.append(points[i])
-    f_points.append(np.mean(gp1, axis=0))   # 將第一個群集的平均點加入到最終點
-    if gp2:  #  如果第 2 群有座標點, 遞迴繼續分 2 群
-        getClusterPoint(gp2)    
 
 # ---- 座標點移動程度 設定 ----#
-import module_move2 as move
-passed = []        # 傳送過的座標點
+import GeorgeModule as m     # 匯入詠運模組
+passed_points = []        # 曾經用 socket 傳過的座標點
 # ---- 座標點移動程度 設定 ----#
 
 
@@ -110,7 +92,7 @@ while True:
         #----  計算輪廓平均座標點
         points = []                     # 儲存所有輪廓的平均座標點
         for c in contours:
-            if cv2.contourArea(c) > 12000:  # 面積大於 12000 的輪廓才需要計算平均座標點
+            if max_contorArea > cv2.contourArea(c) > min_contorArea:  # 面積介於此範圍的輪廓才需要計算平均座標點
                 avp = np.mean(c, axis=0)    # 求形成輪廓的點的平均座標
                 points.append(avp)
 
@@ -118,28 +100,22 @@ while True:
             points = np.array(points)
             points = points[:, 0, :]        # 這是因為多了中間一維 [n, 1, m] -> [n, m]
             # ---- 將過於相近的點合併
-            f_points = []                      # 合併後的所有最終座標點
-            getClusterPoint(points)         # 將所有的輪廓平均座標點丟入遞迴函式中進行分組
-            # print(f'找到 {len(f_points)} 個點')
-            
+            f_points = m.getClusterPoint(points, dist=noise_dist)    # 將所有的輪廓平均座標點丟入遞迴函式中進行分組
+
             # ---- 繪製輪廓平均點
-            # for p in f_points:
-            #     px, py = int(p[0]), int(p[1])
-            #     cv2.circle(depth_img_8U, (px, py), 10, (0, 0, 0), -1)
+            for p in f_points:
+                px, py = int(p[0]), int(p[1])
+                cv2.circle(depth_img_8U, (px, py), 10, (0, 0, 0), -1)
             
             # ---- 判斷座標點移動程度 ---- #
-            pts = move.is_move(passed, f_points)  # 穩定點
-            # print('pts', pts)
-            
+            pts, passed_points = m.is_move(passed_points, f_points)  # 穩定點
             # ---- 將最終座標透過 socket 傳送到 Server 端
             if pts != []:
-                print('pts', pts)
                 # 繪製需傳送的座標點
                 for p in pts:
                     px, py = int(p[0]), int(p[1])
                     cv2.circle(depth_img_8U, (px, py), 10, (0, 0, 0), -1)
-
-                passed = [ps.copy() for ps in f_points]  # 將目前座標點更新為已傳送清單
+                # passed_points = [p.copy() for p in f_points]  # 將目前座標點更新為已傳送清單
                 who = b'machineA'
                 cord = ''
                 for p in pts:
@@ -166,8 +142,6 @@ while True:
             else:
                 # print('No new points to socket')
                 pass
-            
-
         else:
 #            print('沒有偵測到面積大於 12000 的輪廓')
             pass
