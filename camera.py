@@ -4,24 +4,19 @@ import numpy as np
 import cv2
 import socket
 import time
+import serial
 
 
-# ---- 相關數值調整 
-
+# ----------- 相關數值調整
 min_depth = 100             # 偵測深度的最小值 (最近距離)
 max_depth = 300             # 偵測深度的最大值 (最遠距離)
 max_contorArea = 200000     # 最大偵測輪廓面積
 min_contorArea = 12000      # 最小偵測輪廓面積
 noise_dist = 50             # 雜訊距離控制
+# ---------------
 
-
-# ---- 相關數值調整 
-
-
-
-# ---- Socket configuration
+# ---------- Socket configuration
 sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM) 
-
 #host = '192.168.0.249'          # 欲連線的主機
 host = '127.0.0.1'               # local server
 #host = '192.168.0.244'          # Rain Server
@@ -29,9 +24,44 @@ host = '127.0.0.1'               # local server
 
 port = 6666                 # 欲連線的主機埠號
 loc = (host, port)
+# ---------------
 
 
-# ---- 啟動 Realsense 攝影機, 若啟動失敗, 會持續嘗試, 直到
+# ---- 座標點移動程度 設定 ----#
+import GeorgeModule as m     # 匯入詠運模組
+passed_points = []        # 曾經用 socket 傳過的座標點
+# ---------------
+
+
+# ----------------------- 主程式 ---------------------------- #
+
+
+# ---- 設定機器名稱
+
+who = b''
+machine_dict = {'9':  b'machineA', 
+                '10': b'machineB', 
+                '11': b'machineC', 
+                '18': b'machineD', 
+                '19': b'machineE', 
+                '20': b'machineF'}
+
+# COM_PORT = 'COM5'    # 指定通訊埠名稱
+# BAUD_RATES = 9600    # 設定傳輸速率
+# arduino = serial.Serial(COM_PORT, BAUD_RATES)   # 初始化序列通訊埠
+
+# while who == b'':                             # 持續等待 arduino serial 
+#     if arduino.in_waiting:              # 若收到序列資料…
+#         data_raw = arduino.readline()   # 讀取一行
+#         data = data_raw.decode()        # 用預設的 UTF-8 解碼
+#         data = data.replace('\r\n', '') # 去除
+#         who = machine_dict[data]
+#         arduino.close()                 # 關閉序列埠
+
+who = machine_dict['9']
+print('machine name: ', who)
+
+# ---- 啟動 Realsense 攝影機, 若啟動失敗, 會持續嘗試, 直到連上
 while True:
     try:
         pipeline = rs.pipeline()
@@ -40,15 +70,8 @@ while True:
         break
     except:
         print('Camera Error, try again...')
-        
 
-# ---- 座標點移動程度 設定 ----#
-import GeorgeModule as m     # 匯入詠運模組
-passed_points = []        # 曾經用 socket 傳過的座標點
-# ---- 座標點移動程度 設定 ----#
-
-
-# ---- 主程式 ---- #
+# ---- 
 while True:
 
     try:
@@ -108,7 +131,7 @@ while True:
                 cv2.circle(depth_img_8U, (px, py), 10, (0, 0, 0), -1)
             
             # ---- 判斷座標點移動程度 ---- #
-            pts, passed_points = m.is_move(passed_points, f_points)  # 穩定點
+            pts, passed_points = m.is_move(passed_points, f_points, 20)  # 穩定點
             # ---- 將最終座標透過 socket 傳送到 Server 端
             if pts != []:
                 # 繪製需傳送的座標點
@@ -116,14 +139,14 @@ while True:
                     px, py = int(p[0]), int(p[1])
                     cv2.circle(depth_img_8U, (px, py), 10, (0, 0, 0), -1)
                 # passed_points = [p.copy() for p in f_points]  # 將目前座標點更新為已傳送清單
-                who = b'machineA'
+                
                 cord = ''
                 for p in pts:
                     px, py = round(p[0], 1), round(p[1], 1)
                     cord += '@' + str(px) + ',' + str(py)
                 cord = str.encode(cord)     # 字串轉 byte 型別
                 message = who + cord        # 欲傳送的訊息
-                print(cord)
+                print(message)
                 try:
                     sock.sendto(message, loc)
 #                    response = sock.recv(4096)  # 接收伺服器的響應
